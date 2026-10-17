@@ -130,8 +130,6 @@ impl TimedPoseApp {
                 }
                 SessionEvent::SessionCompleted { summary } => {
                     self.screen = AppScreen::Review(summary);
-                    self.active_texture = None;
-                    self.active_decoded = None;
                 }
             }
         }
@@ -232,8 +230,6 @@ impl TimedPoseApp {
             UserAction::ExitToHome => {
                 self.screen = AppScreen::Home;
                 self.session = None;
-                self.active_texture = None;
-                self.active_decoded = None;
             }
             UserAction::OpenSettings => {}
         }
@@ -243,19 +239,36 @@ impl TimedPoseApp {
 // Full app implementation
 impl App for TimedPoseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Upload any pending processed textures to the GPU
+        // 1. Safely free textures from previous session when outside an active session.
+        // Freeing at the top of the frame before any rendering occurs ensures no
+        // draw calls in the current frame reference the freed texture ID.
+        if self.screen != AppScreen::ActiveSession && self.active_texture.is_some() {
+            self.active_texture = None;
+            self.active_decoded = None;
+        }
+
+        // 2. Upload any pending processed textures to the GPU
         self.upload_pending_texture(ctx);
 
-        // Sync audio settings
+        // 3. Sync audio settings
         self.audio.set_enabled(self.config.enable_audio);
         self.audio.set_volume(self.config.volume);
 
-        // Handle tablet hotkeys
+        // 4. Handle tablet hotkeys
         if let Some(action) = HotkeyManager::handle_input(ctx) {
             self.execute_user_action(action, ctx);
         }
 
-        // Screen routing
+        // 5. Periodic session update (advance timers, audio cues, and transitions)
+        if self.screen == AppScreen::ActiveSession {
+            ctx.request_repaint();
+            if let Some(session) = &mut self.session {
+                let events = session.update();
+                self.handle_session_events(events);
+            }
+        }
+
+        // 6. Screen routing
         match &self.screen {
             AppScreen::Home => {
                 CentralPanel::default().show(ctx, |ui| {
@@ -289,15 +302,6 @@ impl App for TimedPoseApp {
                 });
             }
             AppScreen::ActiveSession => {
-                // Continuous repaint for smooth countdown timer
-                ctx.request_repaint();
-
-                // Periodic session update
-                if let Some(session) = &mut self.session {
-                    let events = session.update();
-                    self.handle_session_events(events);
-                }
-
                 CentralPanel::default()
                     .frame(egui::Frame::none().fill(Color32::from_rgb(18, 18, 20)))
                     .show(ctx, |ui| {
