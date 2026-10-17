@@ -193,12 +193,24 @@ impl HudRenderer {
                 ui.separator();
 
                 // Perceptual tools
-                ui.toggle_value(&mut filters.flip_horizontal, "Flip (F)");
-                ui.toggle_value(&mut filters.invert_upside_down, "Upside (U)");
-                ui.toggle_value(&mut filters.grayscale, "Gray (G)");
-                ui.toggle_value(&mut filters.threshold, "Silhouette (S)");
-                ui.toggle_value(&mut filters.squint_blur, "Squint (B)");
-                ui.toggle_value(&mut filters.grid_overlay, "Grid (R)");
+                if ui.selectable_label(filters.flip_horizontal, "Flip (F)").clicked() {
+                    *triggered = Some(UserAction::ToggleFlipHorizontal);
+                }
+                if ui.selectable_label(filters.invert_upside_down, "Upside (U)").clicked() {
+                    *triggered = Some(UserAction::ToggleUpsideDown);
+                }
+                if ui.selectable_label(filters.grayscale, "Gray (G)").clicked() {
+                    *triggered = Some(UserAction::ToggleGrayscale);
+                }
+                if ui.selectable_label(filters.threshold, "Silhouette (S)").clicked() {
+                    *triggered = Some(UserAction::ToggleThreshold);
+                }
+                if ui.selectable_label(filters.squint_blur, "Squint (B)").clicked() {
+                    *triggered = Some(UserAction::ToggleSquintBlur);
+                }
+                if ui.selectable_label(filters.grid_overlay, "Grid (R)").clicked() {
+                    *triggered = Some(UserAction::ToggleGrid);
+                }
 
                 ui.separator();
 

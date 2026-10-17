@@ -31,6 +31,7 @@ pub struct TimedPoseApp {
     active_decoded: Option<DecodedImage>,
     canvas_filters: CanvasFilterSettings,
     pending_texture_update: Option<egui::ColorImage>,
+    _retired_texture: Option<egui::TextureHandle>,
     pan: Vec2,
     zoom: f32,
     screen: AppScreen,
@@ -63,6 +64,7 @@ impl TimedPoseApp {
             active_decoded: None,
             canvas_filters: CanvasFilterSettings::default(),
             pending_texture_update: None,
+            _retired_texture: None,
             pan: Vec2::ZERO,
             zoom: 1.0,
             screen: AppScreen::Home,
@@ -130,6 +132,7 @@ impl TimedPoseApp {
                 }
                 SessionEvent::SessionCompleted { summary } => {
                     self.screen = AppScreen::Review(summary);
+                    self._retired_texture = self.active_texture.take();
                 }
             }
         }
@@ -155,7 +158,11 @@ impl TimedPoseApp {
     // Helper property to hold newly processed images for upload
     fn upload_pending_texture(&mut self, ctx: &egui::Context) {
         if let Some(color_img) = self.pending_texture_update.take() {
-            self.active_texture = Some(ctx.load_texture("pose_texture", color_img, TextureOptions::LINEAR));
+            if let Some(handle) = &mut self.active_texture {
+                handle.set(color_img, TextureOptions::LINEAR);
+            } else {
+                self.active_texture = Some(ctx.load_texture("pose_texture", color_img, TextureOptions::LINEAR));
+            }
         }
     }
 
@@ -190,6 +197,7 @@ impl TimedPoseApp {
                     self.canvas_filters.threshold = false;
                 }
                 self.refresh_texture();
+                self.upload_pending_texture(ctx);
             }
             UserAction::ToggleThreshold => {
                 self.canvas_filters.threshold = !self.canvas_filters.threshold;
@@ -197,10 +205,12 @@ impl TimedPoseApp {
                     self.canvas_filters.grayscale = false;
                 }
                 self.refresh_texture();
+                self.upload_pending_texture(ctx);
             }
             UserAction::ToggleSquintBlur => {
                 self.canvas_filters.squint_blur = !self.canvas_filters.squint_blur;
                 self.refresh_texture();
+                self.upload_pending_texture(ctx);
             }
             UserAction::ToggleGrid => {
                 self.canvas_filters.grid_overlay = !self.canvas_filters.grid_overlay;
@@ -230,6 +240,7 @@ impl TimedPoseApp {
             UserAction::ExitToHome => {
                 self.screen = AppScreen::Home;
                 self.session = None;
+                self._retired_texture = self.active_texture.take();
             }
             UserAction::OpenSettings => {}
         }
@@ -239,11 +250,12 @@ impl TimedPoseApp {
 // Full app implementation
 impl App for TimedPoseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // 1. Safely free textures from previous session when outside an active session.
-        // Freeing at the top of the frame before any rendering occurs ensures no
-        // draw calls in the current frame reference the freed texture ID.
+        // 1. Safely drop any retired texture from the previous frame.
+        // Doing this at the top of update() ensures the previous frame's GPU submit has finished.
+        self._retired_texture = None;
+
         if self.screen != AppScreen::ActiveSession && self.active_texture.is_some() {
-            self.active_texture = None;
+            self._retired_texture = self.active_texture.take();
             self.active_decoded = None;
         }
 
