@@ -9,7 +9,7 @@ pub mod config;
 pub mod image_loader;
 pub mod scanner;
 
-pub use audio::AudioService;
+pub use audio::{AudioService, SoundCueType};
 pub use config::{AppConfig, CanvasTheme, ConfigManager};
 pub use image_loader::{DecodedImage, ImagePreloader};
 pub use scanner::ImageScanner;

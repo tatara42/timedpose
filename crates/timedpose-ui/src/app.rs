@@ -5,11 +5,13 @@ use crate::hud::HudRenderer;
 use crate::review::{ReviewAction, ReviewRenderer};
 use eframe::App;
 use egui::{CentralPanel, Color32, LayerId, Order, TextureOptions, Vec2};
-use std::path::PathBuf;
+use std::path::Path;
 use timedpose_core::{
     Deck, DeckFilter, PoseItem, SessionController, SessionEvent, SessionPreset, SessionSummary,
 };
-use timedpose_infra::{AppConfig, AudioService, ConfigManager, DecodedImage, ImagePreloader, ImageScanner};
+use timedpose_infra::{
+    AppConfig, AudioService, ConfigManager, DecodedImage, ImagePreloader, ImageScanner, SoundCueType,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppScreen {
@@ -42,7 +44,13 @@ pub struct TimedPoseApp {
 impl TimedPoseApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let config = ConfigManager::load();
-        let audio = AudioService::new(config.enable_audio, config.volume);
+        let mut audio = AudioService::new(config.enable_audio, config.volume);
+        audio.load_custom_sounds(
+            config.custom_countdown_sound.as_ref(),
+            config.custom_transition_sound.as_ref(),
+            config.custom_break_sound.as_ref(),
+            config.custom_finished_sound.as_ref(),
+        );
         let preloader = ImagePreloader::new(6);
         let presets = SessionPreset::default_presets();
 
@@ -85,6 +93,15 @@ impl TimedPoseApp {
         app
     }
 
+    fn sync_custom_audio(&mut self) {
+        self.audio.load_custom_sounds(
+            self.config.custom_countdown_sound.as_ref(),
+            self.config.custom_transition_sound.as_ref(),
+            self.config.custom_break_sound.as_ref(),
+            self.config.custom_finished_sound.as_ref(),
+        );
+    }
+
     fn start_session_with_items(&mut self, items: Vec<PoseItem>, ctx: &egui::Context) {
         if items.is_empty() {
             return;
@@ -121,6 +138,9 @@ impl TimedPoseApp {
                         }
                     }
                 }
+                SessionEvent::CountdownTick { seconds_remaining } => {
+                    self.audio.play_countdown_tick(seconds_remaining);
+                }
                 SessionEvent::WarningCue { .. } => {
                     self.audio.play_warning_tick();
                 }
@@ -134,6 +154,7 @@ impl TimedPoseApp {
                     self.audio.play_transition_chime();
                 }
                 SessionEvent::SessionCompleted { summary } => {
+                    self.audio.play_finished_sound();
                     self.screen = AppScreen::Review(summary);
                     self._retired_texture = self.active_texture.take();
                 }
@@ -141,7 +162,7 @@ impl TimedPoseApp {
         }
     }
 
-    fn load_pose_image(&mut self, path: &PathBuf, ctx: &egui::Context) {
+    fn load_pose_image(&mut self, path: &Path, ctx: &egui::Context) {
         if let Ok(decoded) = self.preloader.get_or_load_sync(path) {
             self.active_decoded = Some(decoded.clone());
             self.refresh_texture();
@@ -310,8 +331,37 @@ impl App for TimedPoseApp {
                                 self.scanned_poses = ImageScanner::scan_directory(&folder);
                             }
                             HomeAction::StartSession => {
+                                let _ = ConfigManager::save(&self.config);
                                 let poses = self.scanned_poses.clone();
                                 self.start_session_with_items(poses, ctx);
+                            }
+                            HomeAction::PickCustomSound(cue) => {
+                                let file = rfd::FileDialog::new()
+                                    .add_filter("Audio Files (*.wav, *.ogg)", &["wav", "ogg"])
+                                    .pick_file();
+                                if let Some(path) = file {
+                                    match cue {
+                                        SoundCueType::Countdown => self.config.custom_countdown_sound = Some(path),
+                                        SoundCueType::Transition => self.config.custom_transition_sound = Some(path),
+                                        SoundCueType::Break => self.config.custom_break_sound = Some(path),
+                                        SoundCueType::Finished => self.config.custom_finished_sound = Some(path),
+                                    }
+                                    let _ = ConfigManager::save(&self.config);
+                                    self.sync_custom_audio();
+                                }
+                            }
+                            HomeAction::ResetCustomSound(cue) => {
+                                match cue {
+                                    SoundCueType::Countdown => self.config.custom_countdown_sound = None,
+                                    SoundCueType::Transition => self.config.custom_transition_sound = None,
+                                    SoundCueType::Break => self.config.custom_break_sound = None,
+                                    SoundCueType::Finished => self.config.custom_finished_sound = None,
+                                }
+                                let _ = ConfigManager::save(&self.config);
+                                self.sync_custom_audio();
+                            }
+                            HomeAction::TestSound(cue) => {
+                                self.audio.test_sound(cue);
                             }
                         }
                     }

@@ -42,6 +42,9 @@ pub enum SessionEvent {
         stage_label: String,
         duration: Option<Duration>,
     },
+    CountdownTick {
+        seconds_remaining: u32,
+    },
     WarningCue {
         remaining: Duration,
     },
@@ -184,10 +187,17 @@ impl SessionController {
         let mut events = Vec::new();
 
         if let Some(timer) = &mut self.timer {
-            if timer.is_active() && timer.check_warning_cue(self.warning_threshold) {
-                events.push(SessionEvent::WarningCue {
-                    remaining: timer.remaining(),
-                });
+            if timer.is_active() {
+                if let Some(sec) = timer.check_countdown_cue(3) {
+                    events.push(SessionEvent::CountdownTick {
+                        seconds_remaining: sec,
+                    });
+                }
+                if timer.check_warning_cue(self.warning_threshold) {
+                    events.push(SessionEvent::WarningCue {
+                        remaining: timer.remaining(),
+                    });
+                }
             }
 
             if timer.is_finished() {

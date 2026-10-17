@@ -10,6 +10,7 @@ pub struct Timer {
     accumulated_elapsed: Duration,
     is_paused: bool,
     warning_emitted: bool,
+    countdown_emitted_mask: u32,
 }
 
 impl Timer {
@@ -21,6 +22,7 @@ impl Timer {
             accumulated_elapsed: Duration::ZERO,
             is_paused: false,
             warning_emitted: false,
+            countdown_emitted_mask: 0,
         }
     }
 
@@ -68,6 +70,7 @@ impl Timer {
         self.accumulated_elapsed = Duration::ZERO;
         self.is_paused = false;
         self.warning_emitted = false;
+        self.countdown_emitted_mask = 0;
     }
 
     /// Returns the exact total elapsed duration.
@@ -124,6 +127,28 @@ impl Timer {
             false
         }
     }
+
+    /// Checks if a countdown threshold (e.g. 3, 2, 1 seconds remaining) has been crossed,
+    /// returning `Some(seconds_remaining)` exactly once per integer second.
+    pub fn check_countdown_cue(&mut self, max_countdown_secs: u32) -> Option<u32> {
+        if !self.is_active() {
+            return None;
+        }
+        let rem = self.remaining();
+        if rem.is_zero() {
+            return None;
+        }
+        let rem_millis = rem.as_millis();
+        let sec = rem_millis.div_ceil(1000) as u32;
+        if sec >= 1 && sec <= max_countdown_secs {
+            let bit = 1 << sec;
+            if (self.countdown_emitted_mask & bit) == 0 {
+                self.countdown_emitted_mask |= bit;
+                return Some(sec);
+            }
+        }
+        None
+    }
 }
 
 #[cfg(test)]
@@ -179,5 +204,16 @@ mod tests {
         assert!(timer.check_warning_cue(Duration::from_millis(25)));
         // Second check must return false (fires once per countdown)
         assert!(!timer.check_warning_cue(Duration::from_millis(25)));
+    }
+
+    #[test]
+    fn test_countdown_cue_fires_each_second() {
+        let mut timer = Timer::new(Duration::from_millis(150));
+        timer.start();
+        // At start, remaining is ~150ms (< 1s, so sec is 1)
+        let cue = timer.check_countdown_cue(3);
+        assert_eq!(cue, Some(1));
+        // Calling again during the same second must not re-trigger
+        assert_eq!(timer.check_countdown_cue(3), None);
     }
 }

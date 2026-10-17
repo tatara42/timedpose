@@ -29,6 +29,10 @@ pub struct AppConfig {
     pub squint_blur_radius: f32,
     pub threshold_cutoff: f32,
     pub ghost_opacity: f32,
+    pub custom_countdown_sound: Option<PathBuf>,
+    pub custom_transition_sound: Option<PathBuf>,
+    pub custom_break_sound: Option<PathBuf>,
+    pub custom_finished_sound: Option<PathBuf>,
 }
 
 impl Default for AppConfig {
@@ -48,6 +52,10 @@ impl Default for AppConfig {
             squint_blur_radius: 8.0,
             threshold_cutoff: 0.5,
             ghost_opacity: 0.85,
+            custom_countdown_sound: None,
+            custom_transition_sound: None,
+            custom_break_sound: None,
+            custom_finished_sound: None,
         }
     }
 }
