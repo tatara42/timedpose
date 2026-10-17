@@ -1,0 +1,16 @@
+[package]
+name = "timedpose-infra"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+timedpose-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+directories = { workspace = true }
+image = { workspace = true }
+rodio = { workspace = true }
+rfd = { workspace = true }
+jwalk = { workspace = true }
+crossbeam-channel = { workspace = true }

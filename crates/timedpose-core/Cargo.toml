@@ -1,0 +1,9 @@
+[package]
+name = "timedpose-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core domain logic for Timed Pose: drift-free timers, deck management, and session scheduling"
+
+[dependencies]
+serde = { workspace = true }
+rand = { workspace = true }
