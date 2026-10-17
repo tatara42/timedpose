@@ -139,9 +139,7 @@ impl SessionController {
 
     /// Manually skips to the next pose.
     pub fn next_pose(&mut self) -> Vec<SessionEvent> {
-        let mut events = vec![SessionEvent::TransitionCue];
-        events.extend(self.advance_to_next_step());
-        events
+        self.advance_to_next_step()
     }
 
     /// Navigates back to the previous pose.

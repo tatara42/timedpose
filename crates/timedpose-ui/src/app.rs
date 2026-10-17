@@ -85,7 +85,7 @@ impl TimedPoseApp {
         app
     }
 
-    fn start_session_with_items(&mut self, items: Vec<PoseItem>) {
+    fn start_session_with_items(&mut self, items: Vec<PoseItem>, ctx: &egui::Context) {
         if items.is_empty() {
             return;
         }
@@ -103,14 +103,14 @@ impl TimedPoseApp {
         let events = session.start();
         self.session = Some(session);
         self.screen = AppScreen::ActiveSession;
-        self.handle_session_events(events);
+        self.handle_session_events(events, ctx);
     }
 
-    fn handle_session_events(&mut self, events: Vec<SessionEvent>) {
+    fn handle_session_events(&mut self, events: Vec<SessionEvent>, ctx: &egui::Context) {
         for event in events {
             match event {
                 SessionEvent::PoseChanged { pose, .. } => {
-                    self.load_pose_image(&pose.path);
+                    self.load_pose_image(&pose.path, ctx);
                     // Preload both upcoming and previous images in background thread
                     if let Some(session) = &self.session {
                         if let Some(next_pose) = session.deck().peek_next() {
@@ -141,10 +141,11 @@ impl TimedPoseApp {
         }
     }
 
-    fn load_pose_image(&mut self, path: &PathBuf) {
+    fn load_pose_image(&mut self, path: &PathBuf, ctx: &egui::Context) {
         if let Ok(decoded) = self.preloader.get_or_load_sync(path) {
             self.active_decoded = Some(decoded.clone());
             self.refresh_texture();
+            self.upload_pending_texture(ctx);
             self.pan = Vec2::ZERO;
             self.zoom = 1.0;
         }
@@ -179,13 +180,13 @@ impl TimedPoseApp {
             UserAction::NextPose => {
                 if let Some(session) = &mut self.session {
                     let events = session.next_pose();
-                    self.handle_session_events(events);
+                    self.handle_session_events(events, ctx);
                 }
             }
             UserAction::PrevPose => {
                 if let Some(session) = &mut self.session {
                     let events = session.prev_pose();
-                    self.handle_session_events(events);
+                    self.handle_session_events(events, ctx);
                 }
             }
             UserAction::ToggleFlipHorizontal => {
@@ -279,7 +280,7 @@ impl App for TimedPoseApp {
             ctx.request_repaint();
             if let Some(session) = &mut self.session {
                 let events = session.update();
-                self.handle_session_events(events);
+                self.handle_session_events(events, ctx);
             }
         }
 
@@ -310,7 +311,7 @@ impl App for TimedPoseApp {
                             }
                             HomeAction::StartSession => {
                                 let poses = self.scanned_poses.clone();
-                                self.start_session_with_items(poses);
+                                self.start_session_with_items(poses, ctx);
                             }
                         }
                     }
@@ -357,11 +358,11 @@ impl App for TimedPoseApp {
                                     .into_iter()
                                     .cloned()
                                     .collect();
-                                self.start_session_with_items(items);
+                                self.start_session_with_items(items, ctx);
                             }
                             ReviewAction::RestartPreset => {
                                 let poses = self.scanned_poses.clone();
-                                self.start_session_with_items(poses);
+                                self.start_session_with_items(poses, ctx);
                             }
                             ReviewAction::ReturnHome => {
                                 self.screen = AppScreen::Home;

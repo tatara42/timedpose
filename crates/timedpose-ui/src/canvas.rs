@@ -34,6 +34,12 @@ impl Default for CanvasFilterSettings {
 pub fn process_image_filters(raw: &DecodedImage, filters: &CanvasFilterSettings) -> ColorImage {
     let width = raw.width as usize;
     let height = raw.height as usize;
+
+    // Fast path: if no pixel filters are active, avoid cloning the raw buffer
+    if !filters.squint_blur && !filters.threshold && !filters.grayscale {
+        return ColorImage::from_rgba_unmultiplied([width, height], &raw.rgba);
+    }
+
     let mut pixels = raw.rgba.clone();
 
     // 1. Squint Mode (Blur filter to eliminate micro-details)
