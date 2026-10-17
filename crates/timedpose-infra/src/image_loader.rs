@@ -17,6 +17,14 @@ impl DecodedImage {
     /// Loads and decodes an image file into raw RGBA8 pixels.
     pub fn load_from_file(path: &Path) -> Result<Self, String> {
         let img = image::open(path).map_err(|e| format!("Failed to open {}: {e}", path.display()))?;
+        // If image exceeds 2560px, downsample with aspect ratio preserved to prevent UI stutter
+        let max_dim = 2560;
+        let (w, h) = (img.width(), img.height());
+        let img = if w > max_dim || h > max_dim {
+            img.thumbnail(max_dim, max_dim)
+        } else {
+            img
+        };
         let rgba_img = img.to_rgba8();
         let (width, height) = rgba_img.dimensions();
 

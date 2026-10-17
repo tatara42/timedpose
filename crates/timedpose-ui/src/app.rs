@@ -4,7 +4,7 @@ use crate::hotkeys::{HotkeyManager, UserAction};
 use crate::hud::HudRenderer;
 use crate::review::{ReviewAction, ReviewRenderer};
 use eframe::App;
-use egui::{CentralPanel, Color32, TextureOptions, Vec2};
+use egui::{CentralPanel, Color32, LayerId, Order, TextureOptions, Vec2};
 use std::path::PathBuf;
 use timedpose_core::{
     Deck, DeckFilter, PoseItem, SessionController, SessionEvent, SessionPreset, SessionSummary,
@@ -43,7 +43,7 @@ impl TimedPoseApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let config = ConfigManager::load();
         let audio = AudioService::new(config.enable_audio, config.volume);
-        let preloader = ImagePreloader::new(4);
+        let preloader = ImagePreloader::new(6);
         let presets = SessionPreset::default_presets();
 
         let selected_preset_idx = presets
@@ -111,10 +111,13 @@ impl TimedPoseApp {
             match event {
                 SessionEvent::PoseChanged { pose, .. } => {
                     self.load_pose_image(&pose.path);
-                    // Preload next image in history/deck
+                    // Preload both upcoming and previous images in background thread
                     if let Some(session) = &self.session {
-                        if let Some(next_pose) = session.deck().current() {
+                        if let Some(next_pose) = session.deck().peek_next() {
                             self.preloader.queue_preload(next_pose.path.clone());
+                        }
+                        if let Some(prev_pose) = session.deck().peek_prev() {
+                            self.preloader.queue_preload(prev_pose.path.clone());
                         }
                     }
                 }
@@ -322,17 +325,24 @@ impl App for TimedPoseApp {
                             render_canvas(ui, tex, &self.canvas_filters, &mut self.pan, &mut self.zoom);
                         }
 
-                        // Render HUD Overlay
-                        if let Some(session) = &mut self.session {
-                            if let Some(action) = HudRenderer::render(
-                                ui,
-                                session,
-                                &mut self.canvas_filters,
-                                self.always_on_top,
-                                self.zen_mode,
-                            ) {
-                                self.execute_user_action(action, ctx);
+                        // Render HUD Overlay in Foreground layer for immediate unblocked click responsiveness
+                        let hud_layer = LayerId::new(Order::Foreground, egui::Id::new("session_hud"));
+                        let action = ui.with_layer_id(hud_layer, |hud_ui| {
+                            if let Some(session) = &mut self.session {
+                                HudRenderer::render(
+                                    hud_ui,
+                                    session,
+                                    &mut self.canvas_filters,
+                                    self.always_on_top,
+                                    self.zen_mode,
+                                )
+                            } else {
+                                None
                             }
+                        }).inner;
+
+                        if let Some(action) = action {
+                            self.execute_user_action(action, ctx);
                         }
                     });
             }

@@ -147,18 +147,34 @@ pub fn render_canvas(
     zoom: &mut f32,
 ) -> Rect {
     let available_rect = ui.available_rect_before_wrap();
-    let response = ui.allocate_rect(available_rect, egui::Sense::click_and_drag());
+    // Use drag only (not click) so canvas doesn't contest clicks with overlay buttons
+    let response = ui.allocate_rect(available_rect, egui::Sense::drag());
 
-    // Pan with middle mouse drag, right mouse drag, or left drag when zoomed in
-    if response.dragged() {
-        *pan += response.drag_delta();
+    let is_over_toolbar = ui.input(|i| {
+        if let Some(pos) = i.pointer.hover_pos() {
+            pos.y > available_rect.bottom() - 65.0
+        } else {
+            false
+        }
+    });
+
+    // Pan with middle mouse drag, right mouse drag, or left drag when zoomed in (and not over toolbar)
+    if response.dragged() && !is_over_toolbar {
+        if response.dragged_by(egui::PointerButton::Middle)
+            || response.dragged_by(egui::PointerButton::Secondary)
+            || (*zoom > 1.05 && response.dragged_by(egui::PointerButton::Primary))
+        {
+            *pan += response.drag_delta();
+        }
     }
 
-    // Zoom with scroll wheel
-    let scroll_delta = ui.input(|i| i.smooth_scroll_delta.y);
-    if scroll_delta != 0.0 {
-        let zoom_factor = if scroll_delta > 0.0 { 1.1 } else { 0.9 };
-        *zoom = (*zoom * zoom_factor).clamp(0.2, 8.0);
+    // Zoom with scroll wheel (only if not over toolbar)
+    if !is_over_toolbar {
+        let scroll_delta = ui.input(|i| i.smooth_scroll_delta.y);
+        if scroll_delta != 0.0 {
+            let zoom_factor = if scroll_delta > 0.0 { 1.1 } else { 0.9 };
+            *zoom = (*zoom * zoom_factor).clamp(0.2, 8.0);
+        }
     }
 
     // Calculate aspect-ratio fit

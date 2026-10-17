@@ -205,6 +205,43 @@ impl Deck {
         item_idx.and_then(|idx| self.items.get(idx))
     }
 
+    /// Returns a reference to the upcoming pose that will be displayed on `next()`, without advancing.
+    pub fn peek_next(&self) -> Option<&PoseItem> {
+        if let Some(cursor) = self.history_cursor {
+            if cursor + 1 < self.history.len() {
+                let item_idx = self.history[cursor + 1];
+                return self.items.get(item_idx);
+            }
+        }
+
+        if self.playlist.is_empty() {
+            return None;
+        }
+
+        let next_idx = if self.playlist_index < self.playlist.len() {
+            self.playlist[self.playlist_index]
+        } else {
+            self.playlist[0]
+        };
+
+        self.items.get(next_idx)
+    }
+
+    /// Returns a reference to the pose that will be displayed on `prev()`, without navigating back.
+    pub fn peek_prev(&self) -> Option<&PoseItem> {
+        if self.history.len() <= 1 {
+            return None;
+        }
+
+        let current_pos = self.history_cursor.unwrap_or(self.history.len() - 1);
+        if current_pos > 0 {
+            let prev_idx = self.history[current_pos - 1];
+            self.items.get(prev_idx)
+        } else {
+            None
+        }
+    }
+
     /// Toggles the bookmark state for the currently displayed pose.
     /// Returns the new bookmark state, or false if no pose is active.
     pub fn toggle_bookmark_current(&mut self) -> bool {
@@ -314,5 +351,24 @@ mod tests {
         assert!(!deck.toggle_bookmark_current());
         assert!(!deck.current().unwrap().bookmarked);
         assert_eq!(deck.bookmarked_items().len(), 0);
+    }
+
+    #[test]
+    fn test_peek_next_and_prev() {
+        let paths: Vec<PathBuf> = (0..3).map(|i| PathBuf::from(format!("pose_{i}.jpg"))).collect();
+        let mut deck = Deck::from_paths(&paths);
+
+        // Before any next(), peek_prev is None, peek_next is Some
+        assert!(deck.peek_prev().is_none());
+        assert!(deck.peek_next().is_some());
+
+        let p1 = deck.next().unwrap().id;
+        assert_eq!(deck.current().unwrap().id, p1);
+        assert!(deck.peek_prev().is_none());
+        let expected_next_p2 = deck.peek_next().unwrap().id;
+
+        let p2 = deck.next().unwrap().id;
+        assert_eq!(p2, expected_next_p2);
+        assert_eq!(deck.peek_prev().unwrap().id, p1);
     }
 }
